@@ -12,7 +12,7 @@ const database = require('./src/config/database');
 const tmf760Routes = require('./routes/tmf760Routes');
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Render uses port 10000
+const PORT = process.env.PORT || 3000; // Render uses port 10000
 
 // ===================================
 // MIDDLEWARE SETUP
