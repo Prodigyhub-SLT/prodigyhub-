@@ -29,6 +29,8 @@
   "author": "ProdigyHub Team",
   "license": "MIT",
   "dependencies": {
+    "axios": "^1.11.0",
+    "colors": "^1.4.0",
     "commander": "^14.0.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
