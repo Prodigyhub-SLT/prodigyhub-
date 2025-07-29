@@ -1,4 +1,4 @@
-// src/routes/productOfferings.js - ENHANCED FOR CTK COMPLIANCE
+// src/routes/productOfferings.js - FIXED TO PRESERVE MONGODB EXTENSIONS
 const express = require('express');
 const router = express.Router();
 
@@ -263,103 +263,7 @@ const ensureNestedTypes = (data) => {
       '@referredType': 'ProductOfferingPrice',
       href: price.href || `http://localhost:3000/productCatalogManagement/v5/productOfferingPrice/${price.id || '1'}`,
       id: price.id || '1',
-      name: price.name || 'Default Price',
-      bundledPopRelationship: Array.isArray(price.bundledPopRelationship)
-        ? price.bundledPopRelationship.map(rel => ({
-            ...rel,
-            '@type': 'BundledProductOfferingPriceRelationship',
-            '@referredType': 'ProductOfferingPrice',
-            href: rel.href || `http://localhost:3000/productCatalogManagement/v5/productOfferingPrice/${rel.id || '1'}`,
-            id: rel.id || '1'
-          }))
-        : [],
-      place: Array.isArray(price.place)
-        ? price.place.map(pl => ({
-            ...pl,
-            '@type': 'PlaceRef',
-            '@referredType': 'GeographicAddress',
-            href: pl.href || `http://localhost:3000/tmf-api/geographicAddressManagement/v5/geographicAddress/${pl.id || '1'}`,
-            id: pl.id || '1'
-          }))
-        : [],
-      policy: Array.isArray(price.policy)
-        ? price.policy.map(pol => ({
-            ...pol,
-            '@type': 'PolicyRef',
-            '@referredType': 'Policy',
-            href: pol.href || `http://localhost:3000/tmf-api/policyManagement/v5/policy/${pol.id || '1'}`,
-            id: pol.id || '1'
-          }))
-        : [],
-      popRelationship: Array.isArray(price.popRelationship)
-        ? price.popRelationship.map(rel => ({
-            ...rel,
-            '@type': 'ProductOfferingPriceRelationship',
-            '@referredType': 'ProductOfferingPrice',
-            href: rel.href || `http://localhost:3000/productCatalogManagement/v5/productOfferingPrice/${rel.id || '1'}`,
-            id: rel.id || '1',
-            relationshipType: rel.relationshipType || 'dependency'
-          }))
-        : [],
-      price: price.price || {
-        unit: 'USD',
-        value: 0
-      },
-      pricingLogicAlgorithm: Array.isArray(price.pricingLogicAlgorithm)
-        ? price.pricingLogicAlgorithm.map(alg => ({
-            ...alg,
-            '@type': 'PricingLogicAlgorithm',
-            href: alg.href || `http://localhost:3000/tmf-api/pricingManagement/v5/pricingLogicAlgorithm/${alg.id || '1'}`
-          }))
-        : [],
-      prodSpecCharValueUse: Array.isArray(price.prodSpecCharValueUse)
-        ? price.prodSpecCharValueUse.map(use => ({
-            ...use,
-            '@type': 'ProductSpecificationCharacteristicValueUse',
-            name: use.name || 'Default Characteristic',
-            productSpecCharacteristicValue: Array.isArray(use.productSpecCharacteristicValue)
-              ? use.productSpecCharacteristicValue.map(val => ({
-                  ...val,
-                  '@type': val['@type'] || 'CharacteristicValueSpecification'
-                }))
-              : [],
-            productSpecification: use.productSpecification || {
-              '@type': 'ProductSpecificationRef',
-              '@referredType': 'ProductSpecification',
-              href: `http://localhost:3000/productCatalogManagement/v5/productSpecification/1`,
-              id: '1',
-              name: 'Default Spec',
-              targetProductSchema: {
-                '@type': 'ProductSpecification',
-                '@schemaLocation': 'http://localhost:3000/schema/ProductSpecification.json'
-              }
-            }
-          }))
-        : [],
-      productOfferingTerm: Array.isArray(price.productOfferingTerm)
-        ? price.productOfferingTerm.map(term => ({
-            ...term,
-            '@type': 'ProductOfferingTerm',
-            duration: term.duration || {
-              amount: 12,
-              units: 'Month'
-            }
-          }))
-        : [],
-      tax: Array.isArray(price.tax)
-        ? price.tax.map(tax => ({
-            ...tax,
-            '@type': 'TaxItem',
-            taxAmount: tax.taxAmount || {
-              unit: 'USD',
-              value: 0
-            }
-          }))
-        : [],
-      unitOfMeasure: price.unitOfMeasure || {
-        amount: 1,
-        units: 'each'
-      }
+      name: price.name || 'Default Price'
     }));
   }
   
@@ -467,6 +371,13 @@ const createProductOfferingResponse = (data) => {
     productOfferingPrice: [],
     productOfferingRelationship: [],
     productOfferingTerm: [],
+    
+    // ✅ CRITICAL FIX: Preserve MongoDB Extensions
+    customAttributes: data.customAttributes || [],
+    pricing: data.pricing || null,
+    createdAt: data.createdAt || new Date().toISOString(),
+    updatedAt: data.updatedAt || new Date().toISOString(),
+    extendedData: data.extendedData || null,
     
     '@type': 'ProductOffering'
   };
@@ -612,7 +523,19 @@ router.get('/:id', (req, res, next) => {
 
 router.post('/', (req, res, next) => {
   try {
+    console.log('📥 Backend received offering data:', JSON.stringify(req.body, null, 2));
+    
     const offering = createProductOfferingResponse(req.body);
+    
+    console.log('📦 Backend storing offering with MongoDB extensions:', {
+      id: offering.id,
+      name: offering.name,
+      hasCustomAttributes: !!offering.customAttributes,
+      hasPricing: !!offering.pricing,
+      customAttributesCount: offering.customAttributes?.length || 0,
+      pricingAmount: offering.pricing?.amount || 'Not set'
+    });
+    
     productOfferings.push(offering);
     res.status(201).json(offering);
   } catch (error) {
@@ -631,17 +554,40 @@ router.patch('/:id', (req, res, next) => {
       });
     }
 
+    console.log('📝 Backend updating offering with data:', JSON.stringify(req.body, null, 2));
+
     let updatedOffering = {
       ...productOfferings[index],
       ...req.body,
       id: productOfferings[index].id,
       href: productOfferings[index].href,
       lastUpdate: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       '@type': 'ProductOffering'
     };
 
+    // ✅ CRITICAL FIX: Ensure MongoDB Extensions are preserved during updates
+    if (req.body.customAttributes) {
+      updatedOffering.customAttributes = req.body.customAttributes;
+    }
+    if (req.body.pricing) {
+      updatedOffering.pricing = req.body.pricing;
+    }
+    if (req.body.extendedData) {
+      updatedOffering.extendedData = req.body.extendedData;
+    }
+
     // Ensure all arrays are properly structured during update
     updatedOffering = ensureNestedTypes(updatedOffering);
+    
+    console.log('📦 Backend updated offering preserving MongoDB extensions:', {
+      id: updatedOffering.id,
+      name: updatedOffering.name,
+      hasCustomAttributes: !!updatedOffering.customAttributes,
+      hasPricing: !!updatedOffering.pricing,
+      customAttributesCount: updatedOffering.customAttributes?.length || 0,
+      pricingAmount: updatedOffering.pricing?.amount || 'Not set'
+    });
     
     productOfferings[index] = updatedOffering;
     res.status(200).json(updatedOffering);
