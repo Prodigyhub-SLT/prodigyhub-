@@ -453,7 +453,215 @@ async deleteProductOffering(req, res) {
     handleError(res, error, 'delete product offering');
   }
 }
+// Add these methods to your TMF620Controller class (after line ~185 where createProductOffering ends)
 
+async getProductOfferingPrices(req, res) {
+  try {
+    const { ProductOfferingPrice } = require('./src/models/AllTMFModels');
+    const { fields, limit = 20, offset = 0, ...filters } = req.query;
+    
+    let query = ProductOfferingPrice.find(filters);
+    
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href`);
+    }
+    
+    const prices = await query
+      .limit(parseInt(limit))
+      .skip(parseInt(offset))
+      .sort({ createdAt: -1 });
+    
+    res.json(prices);
+  } catch (error) {
+    handleError(res, error, 'get product offering prices');
+  }
+}
+
+async getProductOfferingPriceById(req, res) {
+  try {
+    const { ProductOfferingPrice } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    const { fields } = req.query;
+    
+    let query = ProductOfferingPrice.findOne({ id });
+    
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href`);
+    }
+    
+    const price = await query;
+    
+    if (!price) {
+      return res.status(404).json({ error: 'ProductOfferingPrice not found' });
+    }
+    
+    res.json(price);
+  } catch (error) {
+    handleError(res, error, 'get product offering price by ID');
+  }
+}
+
+async createProductOfferingPrice(req, res) {
+  try {
+    const { ProductOfferingPrice } = require('./src/models/AllTMFModels');
+    const priceData = {
+      ...req.body,
+      '@type': 'ProductOfferingPrice'
+    };
+    
+    const price = new ProductOfferingPrice(priceData);
+    await price.save();
+    
+    res.status(201).json(price);
+  } catch (error) {
+    handleError(res, error, 'create product offering price');
+  }
+}
+
+async updateProductOfferingPrice(req, res) {
+  try {
+    const { ProductOfferingPrice } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    const updates = { ...req.body, lastUpdate: new Date() };
+    
+    const price = await ProductOfferingPrice.findOneAndUpdate(
+      { id },
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+    
+    if (!price) {
+      return res.status(404).json({ error: 'ProductOfferingPrice not found' });
+    }
+    
+    res.json(price);
+  } catch (error) {
+    handleError(res, error, 'update product offering price');
+  }
+}
+
+async deleteProductOfferingPrice(req, res) {
+  try {
+    const { ProductOfferingPrice } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    
+    const price = await ProductOfferingPrice.findOneAndDelete({ id });
+    
+    if (!price) {
+      return res.status(404).json({ error: 'ProductOfferingPrice not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error) {
+    handleError(res, error, 'delete product offering price');
+  }
+}
+
+async getProductCatalogs(req, res) {
+  try {
+    const { ProductCatalog } = require('./src/models/AllTMFModels');
+    const { fields, limit = 20, offset = 0, ...filters } = req.query;
+    
+    let query = ProductCatalog.find(filters);
+    
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href`);
+    }
+    
+    const catalogs = await query
+      .limit(parseInt(limit))
+      .skip(parseInt(offset))
+      .sort({ createdAt: -1 });
+    
+    res.json(catalogs);
+  } catch (error) {
+    handleError(res, error, 'get product catalogs');
+  }
+}
+
+async getProductCatalogById(req, res) {
+  try {
+    const { ProductCatalog } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    const { fields } = req.query;
+    
+    let query = ProductCatalog.findOne({ id });
+    
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href`);
+    }
+    
+    const catalog = await query;
+    
+    if (!catalog) {
+      return res.status(404).json({ error: 'ProductCatalog not found' });
+    }
+    
+    res.json(catalog);
+  } catch (error) {
+    handleError(res, error, 'get product catalog by ID');
+  }
+}
+
+async createProductCatalog(req, res) {
+  try {
+    const { ProductCatalog } = require('./src/models/AllTMFModels');
+    const catalogData = {
+      ...req.body,
+      '@type': 'ProductCatalog'
+    };
+    
+    const catalog = new ProductCatalog(catalogData);
+    await catalog.save();
+    
+    res.status(201).json(catalog);
+  } catch (error) {
+    handleError(res, error, 'create product catalog');
+  }
+}
+
+async updateProductCatalog(req, res) {
+  try {
+    const { ProductCatalog } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    const updates = { ...req.body, lastUpdate: new Date() };
+    
+    const catalog = await ProductCatalog.findOneAndUpdate(
+      { id },
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+    
+    if (!catalog) {
+      return res.status(404).json({ error: 'ProductCatalog not found' });
+    }
+    
+    res.json(catalog);
+  } catch (error) {
+    handleError(res, error, 'update product catalog');
+  }
+}
+
+async deleteProductCatalog(req, res) {
+  try {
+    const { ProductCatalog } = require('./src/models/AllTMFModels');
+    const { id } = req.params;
+    
+    const catalog = await ProductCatalog.findOneAndDelete({ id });
+    
+    if (!catalog) {
+      return res.status(404).json({ error: 'ProductCatalog not found' });
+    }
+    
+    res.status(204).send();
+  } catch (error) {
+    handleError(res, error, 'delete product catalog');
+  }
+}
 }
 
 // ===================================
