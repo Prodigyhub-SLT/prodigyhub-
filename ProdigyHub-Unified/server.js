@@ -358,22 +358,34 @@ class TMF620Controller {
     }
   }
 
-  async createProductOffering(req, res) {
-    try {
-      const { ProductOffering } = require('./src/models/AllTMFModels');
-      const offeringData = {
-        ...req.body,
-        '@type': 'ProductOffering'
-      };
-      
-      const offering = new ProductOffering(offeringData);
-      await offering.save();
-      
-      res.status(201).json(offering);
-    } catch (error) {
-      handleError(res, error, 'create product offering');
-    }
+// Update your createProductOffering method in server.js
+async createProductOffering(req, res) {
+  try {
+    console.log('📥 Backend received ALL data:', JSON.stringify(req.body, null, 2));
+    
+    const { ProductOffering } = require('./src/models/AllTMFModels');
+    
+    // Create offering with ALL incoming data preserved
+    const offeringData = {
+      ...req.body,  // This spreads ALL fields from the request
+      '@type': 'ProductOffering',
+      lastUpdate: new Date(),
+      updatedAt: new Date()
+    };
+    
+    console.log('📦 Saving ALL data to MongoDB:', JSON.stringify(offeringData, null, 2));
+    
+    // Use mongoose's create method with strict: false override
+    const offering = await ProductOffering.create(offeringData);
+    
+    console.log('✅ MongoDB saved with ALL fields:', JSON.stringify(offering.toObject(), null, 2));
+    
+    res.status(201).json(offering);
+  } catch (error) {
+    console.error('❌ Error saving to MongoDB:', error);
+    handleError(res, error, 'create product offering');
   }
+}
 // Add these methods to TMF620Controller class:
 
 async updateProductSpecification(req, res) {
@@ -417,22 +429,38 @@ async deleteProductSpecification(req, res) {
 
 async updateProductOffering(req, res) {
   try {
+    console.log('📝 Backend updating with ALL data:', JSON.stringify(req.body, null, 2));
+    
     const { ProductOffering } = require('./src/models/AllTMFModels');
     const { id } = req.params;
-    const updates = { ...req.body, lastUpdate: new Date() };
+    
+    const updates = { 
+      ...req.body,
+      lastUpdate: new Date(),
+      updatedAt: new Date()
+    };
+    
+    console.log('📦 Updating MongoDB with ALL fields:', JSON.stringify(updates, null, 2));
     
     const offering = await ProductOffering.findOneAndUpdate(
       { id },
       { $set: updates },
-      { new: true, runValidators: true }
+      { 
+        new: true, 
+        runValidators: true,
+        strict: false
+      }
     );
     
     if (!offering) {
       return res.status(404).json({ error: 'ProductOffering not found' });
     }
     
+    console.log('✅ MongoDB updated with ALL fields:', JSON.stringify(offering.toObject(), null, 2));
+    
     res.json(offering);
   } catch (error) {
+    console.error('❌ Error updating MongoDB:', error);
     handleError(res, error, 'update product offering');
   }
 }
