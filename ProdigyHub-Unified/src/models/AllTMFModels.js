@@ -100,6 +100,7 @@ const ProductOfferingSchema = new mongoose.Schema({
   },
   '@type': { type: String, default: 'ProductOffering' }
 }, {
+  strict: false,
   timestamps: true,
   collection: 'productofferings'
 });
