@@ -76,6 +76,11 @@ const CheckProductConfigurationItemSchema = new mongoose.Schema({
     '@referredType': String
   },
   productConfiguration: ProductConfigurationSchema,
+  // 🔧 ADD THIS: Store the user's configuration data
+  productConfigurationSpecification: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   alternateProductConfigurationProposal: [ProductConfigurationSchema],
   stateReason: [{
     code: String,
@@ -95,6 +100,13 @@ const CheckProductConfigurationSchema = new mongoose.Schema({
   },
   instantSync: { type: Boolean, default: false },
   provideAlternatives: { type: Boolean, default: false },
+  
+  // 🔧 ADD THIS: Store the top-level configuration data
+  productConfigurationSpecification: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  
   channel: {
     id: String,
     href: String,
