@@ -1,6 +1,6 @@
 // ===================================================================
 // Path: controllers/TMF760Controller.js
-// MongoDB-enabled TMF760 Controller
+// FINAL FIX: Enhanced TMF760 Controller with productConfigurationSpecification support
 // ===================================================================
 
 const CheckProductConfiguration = require('../models/CheckProductConfiguration');
@@ -15,6 +15,8 @@ class TMF760Controller {
 
   async createCheckConfiguration(req, res) {
     try {
+      console.log('🔧 Creating configuration with body:', JSON.stringify(req.body, null, 2));
+      
       const configData = {
         ...req.body,
         '@type': 'CheckProductConfiguration'
@@ -25,6 +27,12 @@ class TMF760Controller {
         configData.id = `check_${Date.now()}`;
       }
 
+      // 🔧 CRITICAL FIX: Explicitly preserve productConfigurationSpecification
+      if (req.body.productConfigurationSpecification) {
+        configData.productConfigurationSpecification = req.body.productConfigurationSpecification;
+        console.log('✅ Preserved top-level productConfigurationSpecification');
+      }
+
       // Process configuration if instantSync
       if (configData.instantSync) {
         configData.state = 'done';
@@ -32,6 +40,11 @@ class TMF760Controller {
         configData.checkProductConfigurationItem = configData.checkProductConfigurationItem.map(item => {
           let isValid = true;
           let stateReasons = [];
+
+          // 🔧 CRITICAL: Also preserve productConfigurationSpecification in items
+          if (req.body.productConfigurationSpecification) {
+            item.productConfigurationSpecification = req.body.productConfigurationSpecification;
+          }
 
           // Validate configuration
           if (item.productConfiguration?.configurationCharacteristic) {
@@ -68,18 +81,37 @@ class TMF760Controller {
         });
       } else {
         configData.state = 'acknowledged';
-        configData.checkProductConfigurationItem = configData.checkProductConfigurationItem.map(item => ({
-          ...item,
-          '@type': 'CheckProductConfigurationItem',
-          stateReason: []
-        }));
+        configData.checkProductConfigurationItem = configData.checkProductConfigurationItem.map(item => {
+          // 🔧 CRITICAL: Preserve productConfigurationSpecification in items
+          if (req.body.productConfigurationSpecification) {
+            item.productConfigurationSpecification = req.body.productConfigurationSpecification;
+          }
+          
+          return {
+            ...item,
+            '@type': 'CheckProductConfigurationItem',
+            stateReason: []
+          };
+        });
       }
 
+      console.log('🔧 Final configData before save:', {
+        id: configData.id,
+        hasTopLevelSpec: !!configData.productConfigurationSpecification,
+        hasItemSpec: !!configData.checkProductConfigurationItem?.[0]?.productConfigurationSpecification
+      });
+
       const configuration = new CheckProductConfiguration(configData);
-      await configuration.save();
+      const savedConfig = await configuration.save();
+      
+      console.log('✅ Configuration saved successfully:', {
+        id: savedConfig.id,
+        hasTopLevelSpec: !!savedConfig.productConfigurationSpecification,
+        hasItemSpec: !!savedConfig.checkProductConfigurationItem?.[0]?.productConfigurationSpecification
+      });
       
       const statusCode = configData.instantSync ? 200 : 201;
-      res.status(statusCode).json(configuration);
+      res.status(statusCode).json(savedConfig);
       
     } catch (error) {
       console.error('❌ Error creating check configuration:', error);
@@ -103,14 +135,20 @@ class TMF760Controller {
     try {
       const { fields, limit = 20, offset = 0, ...filters } = req.query;
       
+      console.log('📥 Getting configurations with filters:', filters);
+      
       // Build MongoDB query
       let query = CheckProductConfiguration.find(filters);
       
-      // Apply field selection
+      // 🔧 CRITICAL FIX: Always include productConfigurationSpecification in field selection
       if (fields) {
         const fieldList = fields.split(',').map(f => f.trim()).join(' ');
-        // Always include mandatory TMF fields
-        query = query.select(`${fieldList} @type id href`);
+        // Always include productConfigurationSpecification along with mandatory TMF fields
+        query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
+        console.log('📥 Selected fields include productConfigurationSpecification');
+      } else {
+        // If no specific fields requested, return everything (don't use select)
+        console.log('📥 No field selection - returning all fields');
       }
       
       // Execute query with pagination
@@ -118,6 +156,19 @@ class TMF760Controller {
         .limit(parseInt(limit))
         .skip(parseInt(offset))
         .sort({ createdAt: -1 });
+      
+      console.log('📥 Found configurations:', configurations.length);
+      
+      // Debug first configuration
+      if (configurations.length > 0) {
+        const firstConfig = configurations[0];
+        console.log('📋 First config debug:', {
+          id: firstConfig.id,
+          hasTopLevelSpec: !!firstConfig.productConfigurationSpecification,
+          hasItemSpec: !!firstConfig.checkProductConfigurationItem?.[0]?.productConfigurationSpecification,
+          topLevelSpecKeys: firstConfig.productConfigurationSpecification ? Object.keys(firstConfig.productConfigurationSpecification) : [],
+        });
+      }
       
       // Get total count for pagination headers
       const total = await CheckProductConfiguration.countDocuments(filters);
@@ -142,11 +193,14 @@ class TMF760Controller {
       const { id } = req.params;
       const { fields } = req.query;
       
+      console.log('📥 Getting configuration by ID:', id);
+      
       let query = CheckProductConfiguration.findOne({ id });
       
+      // 🔧 CRITICAL FIX: Always include productConfigurationSpecification
       if (fields) {
         const fieldList = fields.split(',').map(f => f.trim()).join(' ');
-        query = query.select(`${fieldList} @type id href`);
+        query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
       }
       
       const configuration = await query;
@@ -157,6 +211,12 @@ class TMF760Controller {
           message: `CheckProductConfiguration with id ${id} not found`
         });
       }
+      
+      console.log('📋 Configuration found:', {
+        id: configuration.id,
+        hasTopLevelSpec: !!configuration.productConfigurationSpecification,
+        hasItemSpec: !!configuration.checkProductConfigurationItem?.[0]?.productConfigurationSpecification
+      });
       
       res.json(configuration);
       
@@ -173,6 +233,8 @@ class TMF760Controller {
     try {
       const { id } = req.params;
       
+      console.log('🗑️ Deleting configuration with ID:', id);
+      
       const configuration = await CheckProductConfiguration.findOneAndDelete({ id });
       
       if (!configuration) {
@@ -181,6 +243,8 @@ class TMF760Controller {
           message: `CheckProductConfiguration with id ${id} not found`
         });
       }
+      
+      console.log('✅ Configuration deleted successfully:', id);
       
       res.status(204).send();
       
@@ -194,7 +258,7 @@ class TMF760Controller {
   }
 
   // ===================================
-  // QUERY PRODUCT CONFIGURATION
+  // QUERY PRODUCT CONFIGURATION  
   // ===================================
 
   async createQueryConfiguration(req, res) {
@@ -207,6 +271,11 @@ class TMF760Controller {
       // Set ID if not provided
       if (!configData.id) {
         configData.id = `query_${Date.now()}`;
+      }
+
+      // 🔧 CRITICAL FIX: Preserve productConfigurationSpecification for query configs too
+      if (req.body.productConfigurationSpecification) {
+        configData.productConfigurationSpecification = req.body.productConfigurationSpecification;
       }
 
       // Process and compute configuration if instantSync
@@ -339,9 +408,10 @@ class TMF760Controller {
       
       let query = QueryProductConfiguration.find(filters);
       
+      // 🔧 CRITICAL FIX: Always include productConfigurationSpecification
       if (fields) {
         const fieldList = fields.split(',').map(f => f.trim()).join(' ');
-        query = query.select(`${fieldList} @type id href`);
+        query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
       }
       
       const configurations = await query
@@ -372,9 +442,10 @@ class TMF760Controller {
       
       let query = QueryProductConfiguration.findOne({ id });
       
+      // 🔧 CRITICAL FIX: Always include productConfigurationSpecification
       if (fields) {
         const fieldList = fields.split(',').map(f => f.trim()).join(' ');
-        query = query.select(`${fieldList} @type id href`);
+        query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
       }
       
       const configuration = await query;

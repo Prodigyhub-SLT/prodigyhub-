@@ -1,4 +1,5 @@
 // models/CheckProductConfiguration.js
+// FINAL FIX: Add productConfigurationSpecification field to MongoDB schema
 const mongoose = require('mongoose');
 
 const ConfigurationCharacteristicValueSchema = new mongoose.Schema({
@@ -76,7 +77,7 @@ const CheckProductConfigurationItemSchema = new mongoose.Schema({
     '@referredType': String
   },
   productConfiguration: ProductConfigurationSchema,
-  // 🔧 ADD THIS: Store the user's configuration data
+  // 🔧 CRITICAL FIX: Add productConfigurationSpecification field
   productConfigurationSpecification: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
@@ -101,7 +102,7 @@ const CheckProductConfigurationSchema = new mongoose.Schema({
   instantSync: { type: Boolean, default: false },
   provideAlternatives: { type: Boolean, default: false },
   
-  // 🔧 ADD THIS: Store the top-level configuration data
+  // 🔧 CRITICAL FIX: Add the missing productConfigurationSpecification field at top level
   productConfigurationSpecification: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
@@ -138,9 +139,14 @@ const CheckProductConfigurationSchema = new mongoose.Schema({
     value: mongoose.Schema.Types.Mixed,
     '@type': String
   }],
-  checkProductConfigurationItem: [CheckProductConfigurationItemSchema]
+  checkProductConfigurationItem: [CheckProductConfigurationItemSchema],
+  
+  // Additional fields
+  requestedDate: { type: Date, default: Date.now }
 }, {
-  timestamps: true
+  timestamps: true,
+  // 🔧 IMPORTANT: Allow additional fields to be saved and disable strict mode
+  strict: false
 });
 
 // Generate unique ID before saving
