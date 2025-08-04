@@ -3,6 +3,38 @@
 // FINAL FIX: Enhanced TMF760 Controller with productConfigurationSpecification support
 // ===================================================================
 
+// --- Normalization Helper ---
+function normalizeProductConfiguration(config) {
+  // Default fields you want to always show
+  const defaultFields = {
+    connectionType: undefined,
+    packageType: undefined,
+    speedTier: undefined,
+    contractTerm: undefined,
+    staticIP: undefined,
+    entertainmentAddons: [],
+    // Add more fields as needed
+  };
+
+  // Try to extract from configurationCharacteristic
+  if (
+    config.checkProductConfigurationItem &&
+    config.checkProductConfigurationItem[0] &&
+    config.checkProductConfigurationItem[0].productConfiguration &&
+    Array.isArray(config.checkProductConfigurationItem[0].productConfiguration.configurationCharacteristic)
+  ) {
+    for (const char of config.checkProductConfigurationItem[0].productConfiguration.configurationCharacteristic) {
+      if (char.name && char.value !== undefined) {
+        defaultFields[char.name] = char.value;
+      }
+    }
+  }
+
+  // Merge with the config for output
+  return { ...config, ...defaultFields };
+}
+
+
 const CheckProductConfiguration = require('../models/CheckProductConfiguration');
 const QueryProductConfiguration = require('../models/QueryProductConfiguration');
 const { v4: uuidv4 } = require('uuid');
@@ -132,62 +164,40 @@ class TMF760Controller {
   }
 
   async getCheckConfigurations(req, res) {
-    try {
-      const { fields, limit = 20, offset = 0, ...filters } = req.query;
-      
-      console.log('📥 Getting configurations with filters:', filters);
-      
-      // Build MongoDB query
-      let query = CheckProductConfiguration.find(filters);
-      
-      // 🔧 CRITICAL FIX: Always include productConfigurationSpecification in field selection
-      if (fields) {
-        const fieldList = fields.split(',').map(f => f.trim()).join(' ');
-        // Always include productConfigurationSpecification along with mandatory TMF fields
-        query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
-        console.log('📥 Selected fields include productConfigurationSpecification');
-      } else {
-        // If no specific fields requested, return everything (don't use select)
-        console.log('📥 No field selection - returning all fields');
-      }
-      
-      // Execute query with pagination
-      const configurations = await query
-        .limit(parseInt(limit))
-        .skip(parseInt(offset))
-        .sort({ createdAt: -1 });
-      
-      console.log('📥 Found configurations:', configurations.length);
-      
-      // Debug first configuration
-      if (configurations.length > 0) {
-        const firstConfig = configurations[0];
-        console.log('📋 First config debug:', {
-          id: firstConfig.id,
-          hasTopLevelSpec: !!firstConfig.productConfigurationSpecification,
-          hasItemSpec: !!firstConfig.checkProductConfigurationItem?.[0]?.productConfigurationSpecification,
-          topLevelSpecKeys: firstConfig.productConfigurationSpecification ? Object.keys(firstConfig.productConfigurationSpecification) : [],
-        });
-      }
-      
-      // Get total count for pagination headers
-      const total = await CheckProductConfiguration.countDocuments(filters);
-      
-      // Set TMF-compliant headers
-      res.set('X-Total-Count', total.toString());
-      res.set('X-Result-Count', configurations.length.toString());
-      
-      res.json(configurations);
-      
-    } catch (error) {
-      console.error('❌ Error getting check configurations:', error);
-      res.status(500).json({
-        error: 'Internal Server Error',
-        message: error.message
-      });
-    }
-  }
+  try {
+    const { fields, limit = 20, offset = 0, ...filters } = req.query;
+    let query = CheckProductConfiguration.find(filters);
 
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
+    }
+
+    const configurations = await query
+      .limit(parseInt(limit))
+      .skip(parseInt(offset))
+      .sort({ createdAt: -1 });
+
+    // Normalize each config before sending
+    const normalizedConfigs = configurations.map(config => {
+      const plain = config.toObject ? config.toObject() : config;
+      return normalizeProductConfiguration(plain);
+    });
+
+    // Get total count for pagination headers
+    const total = await CheckProductConfiguration.countDocuments(filters);
+    res.set('X-Total-Count', total.toString());
+    res.set('X-Result-Count', normalizedConfigs.length.toString());
+
+    res.json(normalizedConfigs);
+  } catch (error) {
+    console.error('❌ Error getting check configurations:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+}
   async getCheckConfigurationById(req, res) {
     try {
       const { id } = req.params;
@@ -467,7 +477,39 @@ class TMF760Controller {
       });
     }
   }
+async getCheckConfigurationById(req, res) {
+  try {
+    const { id } = req.params;
+    const { fields } = req.query;
 
+    let query = CheckProductConfiguration.findOne({ id });
+
+    if (fields) {
+      const fieldList = fields.split(',').map(f => f.trim()).join(' ');
+      query = query.select(`${fieldList} @type id href productConfigurationSpecification`);
+    }
+
+    const configuration = await query;
+
+    if (!configuration) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: `CheckProductConfiguration with id ${id} not found`
+      });
+    }
+
+    const plain = configuration.toObject ? configuration.toObject() : configuration;
+    const normalizedConfig = normalizeProductConfiguration(plain);
+
+    res.json(normalizedConfig);
+  } catch (error) {
+    console.error('❌ Error getting check configuration by ID:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+}
   async deleteQueryConfiguration(req, res) {
     try {
       const { id } = req.params;
