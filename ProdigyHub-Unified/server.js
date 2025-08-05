@@ -7,10 +7,47 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const database = require('./src/config/database');
-
 const app = express();
+
+
 const PORT = process.env.PORT || 3000;
 
+
+const { getCorsConfig, tmfCorsMiddleware, corsErrorHandler } = require('./src/config/cors');
+// CORS Configuration - CRITICAL: Add this BEFORE your routes
+const corsConfig = getCorsConfig();
+app.use(cors(corsConfig));
+
+// Add enhanced TMF CORS middleware
+app.use(tmfCorsMiddleware);
+
+// Additional CORS middleware for stubborn browsers
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Allow specific origins for development
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ];
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  // Always set these headers
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 // ===================================
 // MIDDLEWARE SETUP
 // ===================================
