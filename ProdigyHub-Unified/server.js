@@ -9,6 +9,58 @@ const { v4: uuidv4 } = require('uuid');
 const database = require('./src/config/database');
 const app = express();
 
+// Collection fix utility function
+async function fixCappedCollection() {
+  try {
+    const mongoose = require('mongoose');
+    const db = mongoose.connection.db;
+    const collection = db.collection('productofferings');
+    
+    // Check if collection exists and is capped
+    const isCapped = await collection.isCapped();
+    console.log('📋 Product Offerings collection capped status:', isCapped);
+    
+    if (isCapped) {
+      console.log('🔧 Converting capped collection to regular collection...');
+      
+      // Export all data
+      const data = await collection.find({}).toArray();
+      console.log(`📦 Found ${data.length} documents to preserve`);
+      
+      // Drop the capped collection
+      await collection.drop();
+      console.log('🗑️ Dropped capped collection');
+      
+      // Recreate as regular collection
+      const newCollection = db.collection('productofferings');
+      
+      // Re-insert all data if any exists
+      if (data.length > 0) {
+        await newCollection.insertMany(data);
+        console.log(`✅ Re-inserted ${data.length} documents`);
+      }
+      
+      console.log('✅ Successfully converted to regular collection!');
+      
+      // Verify the fix
+      const newStats = await newCollection.stats();
+      console.log('📊 New collection stats:', {
+        count: newStats.count,
+        capped: newStats.capped || false
+      });
+    } else {
+      console.log('✅ Product Offerings collection is already regular (not capped)');
+    }
+    
+  } catch (error) {
+    if (error.message.includes('ns not found')) {
+      console.log('📋 Product Offerings collection does not exist yet - will be created normally');
+    } else {
+      console.error('❌ Error checking/fixing collection:', error.message);
+    }
+  }
+}
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -2024,6 +2076,10 @@ async function startServer() {
     console.log('🗄️ Connecting to MongoDB...');
     await database.connect();
     console.log('✅ Database: Connected to MongoDB successfully');
+    
+    // Fix capped collection issue if it exists
+    console.log('🔍 Checking for capped collection issues...');
+    await fixCappedCollection();
     
     // Verify MongoDB models are available
     const models = require('./src/models/AllTMFModels');
